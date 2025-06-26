@@ -1,0 +1,178 @@
+User: frankli
+Date: 27 Feb 06 20:41
+Revision: 3837f7bf6481d56bcbc279b3c24fdb034d9b9240cf0375276066c4c62b376d90
+Summary:
+(TC-test): 1 file changes
+
+TeamCity URL: http://localhost:8111/viewModification.html?tab=vcsModificationFiles&modId=346&personal=false
+
+Index: 2.txt
+===================================================================
+--- 2.txt	(revision 9792fe763a73fbe9dc8464d20ea68cdc06b71f403e4003f9676e689159dc4cec)
++++ 2.txt	(revision 3837f7bf6481d56bcbc279b3c24fdb034d9b9240cf0375276066c4c62b376d90)
+@@ -1,1 +1,163 @@
+-"add file 11122" 
++@echo off
++REM Copyright (C) Softbridge Technology (Shenzhen) Co., Ltd.
++
++setlocal EnableDelayedExpansion
++pushd %~dp0
++
++set VB_ROOT=%~dp0
++
++set "PERLDIR=C:\Strawberry\perl\bin"
++set "BUILDDIR=%VB_ROOT%intermediate\win64"
++
++set "VB_JAVA_INCLUDE=%VB_ROOT%compat\Java\jdk-1.8\include"
++IF "%~1" == "x86" (
++set "VB_JAVA_INCLUDE=C:\Program Files (x86)\Eclipse Adoptium\jdk-8.0.442.6-hotspot\include"
++)
++
++set "VB_JAVA_INCLUDE_WIN32=%VB_ROOT%compat\Java\jdk-1.8\include\win32"
++IF "%~1" == "x86" (
++set "VB_JAVA_INCLUDE_WIN32=C:\Program Files (x86)\Eclipse Adoptium\jdk-8.0.442.6-hotspot\include\win32"
++)
++
++set VB_TOOLS=%VB_ROOT%tools
++set VB_SWIG_INTERFACE_FILE=%VB_TOOLS%\library\java\visionbyte.java.i
++
++call :VB_FINDVS
++SET VSVARS32=%VSWHEREINSTALLDIR%\VC\Auxiliary\Build\vcvars64.bat
++IF "%~1" == "x86" (
++  SET VSVARS32=%VSWHEREINSTALLDIR%\VC\Auxiliary\Build\vcvars32.bat
++)
++call "%VSVARS32%"
++
++
++swig --version > nul
++if errorlevel 1 (
++  call :LOG_ERROR swig not installed, skip generate swig python
++  goto :FAILURE
++)
++
++java -version > nul
++if errorlevel 1 (
++  call :LOG_ERROR python not installed, skip generate swig java
++  goto :FAILURE
++)
++
++if not exist %BUILDDIR%\vb.exe (
++  call :LOG_ERROR build fossil.exe before build python extension.
++  goto :FAILURE
++)
++
++set "VB_JAVA_WRAP_C=%BUILDDIR%\vb_java_wrap.c"
++set "VB_JAVA_WRAP_OBJ=%BUILDDIR%\vb_java_wrap.obj"
++set "VB_JAVA_DLL=%VB_ROOT%tools\library\java\VisionByte\_vb.dll"
++set "VB_JAVA_OUTDIR=%VB_ROOT%tools\library\java\VisionByte\src\main\java\com\softbridge\visionbyte\vbcore"
++set "VB_JAVA_PACKAGE=com.softbridge.visionbyte.vbcore"
++set "VB_TC_TEST_DIR=%VB_ROOT%tools\plugins\TeamCity\VisionByte\VisionByte-tests"
++
++pushd %BUILDDIR%
++call :LOG_INFO swig generate %VB_JAVA_WRAP_C%
++
++swig ^
++ -java ^
++ -package "%VB_JAVA_PACKAGE%" ^
++ -I"." ^
++ -I"%VB_ROOT%\src" ^
++ -I"%VB_ROOT%\extsrc" ^
++ -I"%VB_ROOT%\win" ^
++ -I"%VB_ROOT%\win\include" ^
++ -I"%VB_ROOT%\compat\zlib" ^
++ -I"%VB_ROOT%\compat\openssl\include" ^
++ -outdir %VB_JAVA_OUTDIR% ^
++ -o %VB_JAVA_WRAP_C% ^
++ %VB_SWIG_INTERFACE_FILE%
++if errorlevel 1 (
++  call :LOG_ERROR swig %VB_SWIG_INTERFACE_FILE% error
++  goto :FAILURE
++)
++
++call :LOG_INFO compile %VB_JAVA_WRAP_C% to %VB_JAVA_WRAP_OBJ% ...
++cl /c /nologo /W2 /WX /utf-8 ^
++  /D_CRT_SECURE_NO_DEPRECATE ^
++  /D_CRT_SECURE_NO_WARNINGS ^
++  /D_CRT_NONSTDC_NO_DEPRECATE ^
++  /D_CRT_NONSTDC_NO_WARNINGS ^
++  /MT /O2 ^
++  /I. ^
++  /I"." ^
++  /I"%VB_ROOT%src" ^
++  /I"%VB_ROOT%extsrc" ^
++  /I"%VB_ROOT%win" ^
++  /I"%VB_ROOT%win\include" ^
++  /I"%VB_ROOT%compat\zlib" ^
++  /I"%VB_ROOT%\compat\openssl\include" ^
++  /I"%VB_JAVA_INCLUDE%" ^
++  /I"%VB_JAVA_INCLUDE_WIN32%" ^
++  /DFOSSIL_ENABLE_JSON=1 ^
++  /DFOSSIL_ENABLE_PROTOBUF=1 ^
++  /DFOSSIL_ENABLE_SSL=1 ^
++  /Fo"%VB_JAVA_WRAP_OBJ%" ^
++  /Fd"."\ ^
++  "%VB_JAVA_WRAP_C%"
++if errorlevel 1 (
++  call :LOG_ERROR build %VB_JAVA_WRAP_OBJ% error
++  goto :FAILURE
++)
++
++call :LOG_INFO link build %VB_JAVA_DLL% ...
++link /nologo /NODEFAULTLIB:msvcrt /MANIFEST:NO ^
++ /DLL ^
++ /OUT:"%VB_JAVA_DLL%" ^
++ /PDB:"."\ ^
++ /LIBPATH:"%VB_ROOT%\compat\zlib" ^
++ /LIBPATH:"%VB_ROOT%\compat\openssl" ^
++ %VB_JAVA_WRAP_OBJ% ^
++ Wsetargv.obj ^
++ @".\linkopts"
++if errorlevel 1 (
++  call :LOG_ERROR link %VB_JAVA_DLL% error
++  goto :FAILURE
++)
++
++copy /Y "%VB_JAVA_DLL%" "%VB_TC_TEST_DIR%\_vb.dll"
++if errorlevel 1 (
++  call :LOG_ERROR copy %VB_JAVA_DLL% to %VB_TC_TEST_DIR% error
++  goto :FAILURE
++)
++
++goto :SUCCESS
++:SUCCESS
++call :LOG_INFO Good Luck, %~n0 Success.
++endlocal
++popd
++exit /b 0
++
++
++:FAILURE
++call :LOG_ERROR %*
++endlocal
++popd
++exit /b 1
++
++
++:VB_FINDVS
++IF DEFINED VSWHERE_EXE GOTO skip_setVsWhereExe
++SET VSWHERE_EXE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe
++IF NOT EXIST "%VSWHERE_EXE%" SET VSWHERE_EXE=%ProgramFiles%\Microsoft Visual Studio\Installer\vswhere.exe
++IF NOT EXIST "%VSWHERE_EXE%" (
++  call :LOG_ERROR The "vswhere.exe" tool does not appear to be installed.
++  goto :EOF
++)
++SET VS_WHEREIS_CMD="%VSWHERE_EXE%" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath -latest
++FOR /F "delims=" %%D IN ('%VS_WHEREIS_CMD%') DO (SET "VSWHEREINSTALLDIR=%%D")
++echo %VSWHEREINSTALLDIR%
++goto :EOF
++
++
++:LOG_INFO
++echo [%date:~0,10% %time% %~n0] INFO %*
++goto :EOF
++
++
++:LOG_ERROR
++echo [%date:~0,10% %time% %~n0] ERROR %*
++goto :EOF
+\ No newline at end of file
